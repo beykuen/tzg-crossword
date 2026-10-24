@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="屬性對決">
+<title>屬性對決</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --panel: #f3f5f8;
+  --ink: #141a22;
+  --muted: #5a6573;
+  --line: #d6dce4;
+  --accent: #2b59c3;
+  --win: #1f8a4c;
+  --lose: #c0392b;
+  --water: #1e6fd9;  --water-2: #0b4aa2;
+  --fire:  #e2501d;  --fire-2:  #a8330b;
+  --ice:   #2bb3c9;  --ice-2:   #137c8f;
+  --cw: 92px;  /* hand card width */
+  --font: "Noto Sans TC", "PingFang TC", "Heiti TC", "Microsoft JhengHei", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font);
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+.app { display: flex; flex-direction: column; height: 100dvh; max-width: 1100px; margin: 0 auto;
+  padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left)); }
+
+header { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 2px solid var(--line); }
+header h1 { font-size: 22px; font-weight: 900; margin: 0; flex: 1; }
+.room-tag { font-size: 15px; font-weight: 700; color: var(--muted); }
+.room-tag b { color: var(--ink); letter-spacing: 2px; }
+.btn { border: 2px solid var(--ink); background: #fff; border-radius: 12px; padding: 10px 18px; font-weight: 700; font-size: 17px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.small { padding: 6px 12px; font-size: 15px; border-width: 1.5px; }
+.btn:disabled { opacity: .4; cursor: default; }
+
+/* ---------- lobby ---------- */
+.screen { flex: 1; display: none; flex-direction: column; min-height: 0; }
+.screen.on { display: flex; }
+.center-col { margin: auto; width: min(440px, 100%); display: flex; flex-direction: column; gap: 18px; text-align: center; padding: 24px 0; }
+.center-col h2 { font-size: 28px; font-weight: 900; margin: 0; }
+.center-col p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.6; }
+.code-input { font: inherit; font-size: 40px; font-weight: 900; letter-spacing: 14px; text-align: center; width: 100%;
+  padding: 10px; border: 2px solid var(--ink); border-radius: 12px; -webkit-user-select: text; user-select: text; }
+.big-code { font-size: 72px; font-weight: 900; letter-spacing: 16px; margin: 4px 0; }
+.err { color: var(--lose); font-weight: 700; min-height: 1.4em; }
+.divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 15px; }
+.divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+
+/* ---------- cycle diagram ---------- */
+.cycle { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 18px; font-weight: 700; flex-wrap: wrap; }
+.cycle .tag { padding: 4px 10px; border-radius: 999px; color: #fff; }
+.cycle .arr { color: var(--muted); font-size: 15px; }
+
+/* ---------- cards ---------- */
+.card { position: relative; width: var(--cw); aspect-ratio: 5 / 7; border-radius: 12px; color: #fff; flex: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 2px 0 rgba(0,0,0,.18); border: 3px solid rgba(255,255,255,.9); outline: 1.5px solid rgba(0,0,0,.25); }
+.card .sym { position: absolute; top: 6%; left: 9%; font-size: calc(var(--cw) * .2); line-height: 1; }
+.card .lv { font-size: calc(var(--cw) * .52); font-weight: 900; line-height: 1; text-shadow: 0 2px 0 rgba(0,0,0,.25); }
+.card .nm { font-size: calc(var(--cw) * .18); font-weight: 700; margin-top: 4%; }
+.card.water { background: linear-gradient(160deg, var(--water), var(--water-2)); }
+.card.fire  { background: linear-gradient(160deg, var(--fire), var(--fire-2)); }
+.card.ice   { background: linear-gradient(160deg, var(--ice), var(--ice-2)); }
+.card.back  { background: repeating-linear-gradient(45deg, #2a3442 0 8px, #364353 8px 16px); }
+.card.back::after { content: "?"; font-size: calc(var(--cw) * .4); font-weight: 900; opacity: .5; }
+.card.empty { background: transparent; border: 3px dashed var(--line); outline: none; box-shadow: none; }
+
+/* ---------- game ---------- */
+.side { display: flex; align-items: center; gap: 12px; padding: 8px 0; min-height: 0; }
+.who { font-weight: 900; font-size: 17px; width: 3.2em; flex: none; }
+.opp-hand { display: flex; gap: 4px; --cw: 30px; }
+.opp-hand .card { border-width: 2px; border-radius: 6px; }
+.opp-hand .card::after { display: none; }
+
+.pile { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
+.pile-group { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 10px; background: var(--panel); min-height: 52px; }
+.pile-group .lbl { font-size: 14px; font-weight: 700; color: var(--muted); margin-right: 2px; }
+.pile-group .card { --cw: 32px; border-width: 2px; border-radius: 6px; }
+.pile-group .card .sym, .pile-group .card .nm { display: none; }
+.pile-group .card .lv { font-size: 20px; }
+.pile-group .card.hl { outline: 3px solid #f2b705; outline-offset: 1px; }
+
+.arena { flex: 1; min-height: 210px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
+  border-top: 2px solid var(--line); border-bottom: 2px solid var(--line); padding: 10px 0; }
+.slot { display: flex; flex-direction: column; align-items: center; gap: 6px; --cw: 104px; }
+.slot .cap { font-size: 15px; font-weight: 700; color: var(--muted); }
+.slot .card.mine-hidden { opacity: .55; }
+.verdict { text-align: center; min-width: 200px; }
+.verdict .big { font-size: 34px; font-weight: 900; }
+.verdict .why { font-size: 17px; font-weight: 700; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.verdict .big.win { color: var(--win); } .verdict .big.lose { color: var(--lose); } .verdict .big.tie { color: var(--muted); }
+.flip { animation: flip .45s ease-out both; }
+@keyframes flip { from { transform: rotateY(90deg) scale(.9); } to { transform: none; } }
+
+.hand-bar { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 14px; }
+.hand-top { display: flex; align-items: center; gap: 12px; }
+.hint { flex: 1; font-size: 17px; font-weight: 700; }
+.hand { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding-top: 14px; }
+.hand .card { transition: transform .15s; }
+.hand .card.sel { transform: translateY(-14px); outline: 4px solid #f2b705; }
+.hand.locked .card { opacity: .5; }
+.deck-info { font-size: 14px; color: var(--muted); }
+
+.banner { position: fixed; inset: 0; background: rgba(255,255,255,.94); display: none; z-index: 10;
+  align-items: center; justify-content: center; padding: 24px; }
+.banner.on { display: flex; }
+.banner .box { text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center; max-width: 520px; }
+.banner h2 { font-size: 44px; font-weight: 900; margin: 0; }
+.banner .row { display: flex; gap: 10px; justify-content: center; --cw: 84px; flex-wrap: wrap; }
+.banner p { margin: 0; font-size: 18px; color: var(--muted); line-height: 1.6; }
+
+dialog { border: 2px solid var(--ink); border-radius: 16px; padding: 22px; max-width: min(520px, 92vw); font-size: 17px; line-height: 1.7; }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog h3 { margin: 0 0 8px; font-size: 22px; }
+dialog ul { padding-left: 1.2em; margin: 8px 0 16px; }
+
+@media (max-width: 720px) {
+  :root { --cw: 64px; }
+  .slot { --cw: 80px; }
+  .verdict { min-width: 0; } .verdict .big { font-size: 26px; }
+  .hand { gap: 6px; }
+  .who { width: auto; }
+}
+@media (max-height: 760px) and (min-width: 721px) {
+  :root { --cw: 82px; }
+  .slot { --cw: 90px; }
+  .arena { min-height: 170px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>屬性對決</h1>
+    <span class="room-tag" id="roomTag" hidden>房號 <b id="roomTagCode"></b></span>
+    <button class="btn small" id="rulesBtn">規則</button>
+  </header>
+
+  <!-- lobby -->
+  <section class="screen on" id="lobby">
+    <div class="center-col">
+      <h2>兩人連線對戰</h2>
+      <div class="cycle" aria-label="水剋火、火剋冰、冰剋水">
+        <span class="tag" style="background:var(--water)">💧 水</span><span class="arr">剋</span>
+        <span class="tag" style="background:var(--fire)">🔥 火</span><span class="arr">剋</span>
+        <span class="tag" style="background:var(--ice)">❄️ 冰</span><span class="arr">剋</span>
+        <span class="tag" style="background:var(--water)">💧 水</span>
+      </div>
+      <button class="btn primary" id="hostBtn">開新房間</button>
+      <div class="divider">或輸入朋友的房號</div>
+      <input class="code-input" id="codeInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off">
+      <button class="btn" id="joinBtn">加入房間</button>
+      <div class="err" id="lobbyErr"></div>
+    </div>
+  </section>
+
+  <!-- waiting -->
+  <section class="screen" id="waiting">
+    <div class="center-col">
+      <p id="waitMsg">把這個房號告訴朋友</p>
+      <div class="big-code" id="bigCode">····</div>
+      <p id="waitSub">等待對手加入…</p>
+      <button class="btn" id="cancelBtn">取消</button>
+    </div>
+  </section>
+
+  <!-- game -->
+  <section class="screen" id="game">
+    <div class="side">
+      <div class="who">對手</div>
+      <div class="opp-hand" id="oppHand"></div>
+    </div>
+    <div class="side">
+      <div class="who"></div>
+      <div class="pile" id="oppPile"></div>
+    </div>
+
+    <div class="arena">
+      <div class="slot"><div id="mySlot"></div><div class="cap">你</div></div>
+      <div class="verdict" id="verdict"></div>
+      <div class="slot"><div id="oppSlot"></div><div class="cap">對手</div></div>
+    </div>
+
+    <div class="side">
+      <div class="who">你</div>
+      <div class="pile" id="myPile"></div>
+    </div>
+    <div class="hand-bar">
+      <div class="hand-top">
+        <div class="hint" id="hint"></div>
+        <span class="deck-info" id="deckInfo"></span>
+        <button class="btn primary" id="playBtn" disabled>出這張</button>
+      </div>
+      <div class="hand" id="hand"></div>
+    </div>
+  </section>
+</div>
+
+<div class="banner" id="endBanner">
+  <div class="box">
+    <h2 id="endTitle"></h2>
+    <p id="endWhy"></p>
+    <div class="row" id="endCards"></div>
+    <div style="display:flex;gap:12px">
+      <button class="btn primary" id="rematchBtn">再來一局</button>
+      <button class="btn" id="leaveBtn">離開</button>
+    </div>
+    <p id="rematchMsg"></p>
+  </div>
+</div>
+
+<div class="banner" id="dropBanner">
+  <div class="box">
+    <h2 style="font-size:32px">對方已離線</h2>
+    <p>連線中斷了，請回到大廳重新開房間。</p>
+    <button class="btn primary" id="dropBtn">回大廳</button>
+  </div>
+</div>
+
+<dialog id="rulesDlg">
+  <h3>規則</h3>
+  <ul>
+    <li>牌有水、火、冰三種屬性，等級 1～9。每人手上 7 張。</li>
+    <li>每回合兩人各選一張牌，都選好後同時翻開。</li>
+    <li>屬性不同：水剋火、火剋冰、冰剋水，剋人的一方贏，等級不算。</li>
+    <li>屬性相同：等級高的贏；等級也一樣就平手，沒人得分。</li>
+    <li>贏的人把自己出的那張牌收進分數區。出完牌各補一張。</li>
+    <li>分數區先湊到「同一屬性 3 張」或「水、火、冰各 1 張」的人獲勝。</li>
+  </ul>
+  <form method="dialog" style="text-align:right"><button class="btn primary">知道了</button></form>
+</dialog>
+
+<script>
+// RULES-START — pure game logic, no DOM; tested separately.
+const ELS = ['water', 'fire', 'ice'];
+const EL_NAME = { water: '水', fire: '火', ice: '冰' };
+const EL_SYM = { water: '💧', fire: '🔥', ice: '❄️' };
+const BEATS = { water: 'fire', fire: 'ice', ice: 'water' };
+const HAND_SIZE = 7;
+
+function newDeck() {
+  const d = [];
+  for (const el of ELS) for (let lv = 1; lv <= 9; lv++) for (let k = 0; k < 2; k++) d.push({ id: el + lv + '_' + k, el, lv });
+  return d;
+}
+function shuffle(a, rng = Math.random) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// 0 = a wins, 1 = b wins, -1 = tie. Element advantage ignores level entirely.
+function compare(a, b) {
+  if (a.el === b.el) return a.lv > b.lv ? 0 : a.lv < b.lv ? 1 : -1;
+  return BEATS[a.el] === b.el ? 0 : 1;
+}
+function reasonText(a, b) {
+  if (a.el !== b.el) {
+    const [w, l] = BEATS[a.el] === b.el ? [a, b] : [b, a];
+    return EL_SYM[w.el] + EL_NAME[w.el] + ' 剋 ' + EL_SYM[l.el] + EL_NAME[l.el];
+  }
+  if (a.lv === b.lv) return '同屬性、同等級';
+  const [hi, lo] = a.lv > b.lv ? [a, b] : [b, a];
+  return '同屬性，' + hi.lv + ' 級比 ' + lo.lv + ' 級大';
+}
+// Returns the cards that make a winning set, or null.
+function winningSet(pile) {
+  const by = { water: [], fire: [], ice: [] };
+  for (const c of pile) by[c.el].push(c);
+  for (const el of ELS) if (by[el].length >= 3) return by[el].slice(0, 3);
+  if (ELS.every(el => by[el].length)) return ELS.map(el => by[el][0]);
+  return null;
+}
+function newGame(rng = Math.random) {
+  const deck = shuffle(newDeck(), rng);
+  return { deck, discard: [], hands: [deck.splice(0, HAND_SIZE), deck.splice(0, HAND_SIZE)],
+    piles: [[], []], played: [null, null], last: null, winner: null, winSet: null, round: 1, rng,
+    gid: Math.floor(rng() * 1e9) };
+}
+function draw(g, p) {
+  while (g.hands[p].length < HAND_SIZE) {
+    if (!g.deck.length) { if (!g.discard.length) return; g.deck = shuffle(g.discard, g.rng); g.discard = []; }
+    g.hands[p].push(g.deck.pop());
+  }
+}
+function play(g, p, cardId) {
+  if (g.winner !== null || g.played[p]) return false;
+  const i = g.hands[p].findIndex(c => c.id === cardId);
+  if (i < 0) return false;
+  g.played[p] = g.hands[p].splice(i, 1)[0];
+  if (g.played[0] && g.played[1]) resolve(g);
+  return true;
+}
+function resolve(g) {
+  const cards = g.played, r = compare(cards[0], cards[1]);
+  g.last = { cards, winner: r, round: g.round };
+  if (r >= 0) { g.piles[r].push(cards[r]); g.discard.push(cards[1 - r]); }
+  else g.discard.push(cards[0], cards[1]);
+  g.played = [null, null];
+  draw(g, 0); draw(g, 1);
+  if (r >= 0) { const ws = winningSet(g.piles[r]); if (ws) { g.winner = r; g.winSet = ws.map(c => c.id); } }
+  g.round++;
+}
+// What player p is allowed to see: never the opponent's hand or face-down card.
+function view(g, p) {
+  const o = 1 - p, L = g.last;
+  return {
+    hand: g.hands[p], oppCount: g.hands[o].length, pile: g.piles[p], oppPile: g.piles[o],
+    myPlayed: g.played[p], oppPlayed: !!g.played[o], deck: g.deck.length, round: g.round,
+    last: L && { mine: L.cards[p], opp: L.cards[o], result: L.winner === -1 ? 'tie' : L.winner === p ? 'win' : 'lose',
+                 why: reasonText(L.cards[0], L.cards[1]), round: L.round },
+    winner: g.winner === null ? null : g.winner === p ? 'me' : 'opp', winSet: g.winSet, gid: g.gid,
+  };
+}
+// RULES-END
+
+// ---------------- connection ----------------
+// Room code → PeerJS id on the free public PeerJS broker. "?bc" swaps in a
+// same-browser BroadcastChannel transport so two tabs can be tested offline.
+const PREFIX = 'beykuen-tzgcards-';
+const USE_BC = new URLSearchParams(location.search).has('bc');
+let role = null, code = '', peer = null, conn = null, bc = null, g = null, connected = false;
+
+function loadPeerJS() {
+  if (window.Peer) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js';
+    s.onload = res; s.onerror = () => rej(new Error('load'));
+    document.head.appendChild(s);
+  });
+}
+function randCode() { return String(Math.floor(Math.random() * 10000)).padStart(4, '0'); }
+
+function send(msg) {
+  if (USE_BC) bc && bc.postMessage({ from: role, ...msg });
+  else if (conn && conn.open) conn.send(msg);
+}
+
+async function startHost(attempt = 0) {
+  role = 'host'; code = randCode();
+  show('waiting'); $('bigCode').textContent = '····'; $('waitSub').textContent = '建立房間中…';
+  if (USE_BC) {
+    bc = new BroadcastChannel(PREFIX + code);
+    bc.onmessage = e => { if (e.data.from === 'guest') hostOnData(e.data); };
+    roomReady(); return;
+  }
+  try { await loadPeerJS(); } catch { return lobbyError('無法載入連線元件，請確認網路後再試。'); }
+  peer = new Peer(PREFIX + code);
+  peer.on('open', roomReady);
+  peer.on('connection', c => {
+    if (conn) { c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 500); }); return; }
+    conn = c;
+    c.on('data', hostOnData);
+    c.on('close', dropped);
+  });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id' && attempt < 5) { peer.destroy(); startHost(attempt + 1); }
+    else if (!connected) lobbyError('建立房間失敗（' + e.type + '），請再試一次。');
+  });
+  peer.on('disconnected', () => { if (peer && !peer.destroyed) peer.reconnect(); });
+}
+function roomReady() {
+  $('bigCode').textContent = code; $('waitSub').textContent = '等待對手加入…';
+  setRoomTag();
+}
+function hostOnData(m) {
+  if (m.t === 'hello') { connected = true; g = newGame(); hostPush(); show('game'); }
+  else if (m.t === 'play' && g) { if (play(g, 1, m.id)) hostPush(); }
+  else if (m.t === 'rematch') { rematchWanted[1] = true; maybeRematch(); }
+  else if (m.t === 'bye') dropped();
+}
+const rematchWanted = [false, false];
+function maybeRematch() {
+  if (role === 'host' && rematchWanted[0] && rematchWanted[1]) { rematchWanted[0] = rematchWanted[1] = false; g = newGame(); hostPush(); }
+  else hostPush();
+}
+function hostPush() {
+  const v0 = view(g, 0), v1 = view(g, 1);
+  v0.rematch = { me: rematchWanted[0], opp: rematchWanted[1] };
+  v1.rematch = { me: rematchWanted[1], opp: rematchWanted[0] };
+  render(v0); send({ t: 'state', v: v1 });
+}
+
+async function startGuest(c) {
+  role = 'guest'; code = c;
+  show('waiting'); $('bigCode').textContent = code; $('waitMsg').textContent = '加入房間'; $('waitSub').textContent = '連線中…';
+  setRoomTag();
+  if (USE_BC) {
+    bc = new BroadcastChannel(PREFIX + code);
+    bc.onmessage = e => { if (e.data.from === 'host') guestOnData(e.data); };
+    send({ t: 'hello' }); return;
+  }
+  try { await loadPeerJS(); } catch { return lobbyError('無法載入連線元件，請確認網路後再試。'); }
+  const timer = setTimeout(() => { if (!connected) lobbyError('連不上這個房間。請確認房號，或兩台裝置換個網路再試。'); }, 15000);
+  peer = new Peer();
+  peer.on('open', () => {
+    conn = peer.connect(PREFIX + code, { reliable: true });
+    conn.on('open', () => send({ t: 'hello' }));
+    conn.on('data', m => { clearTimeout(timer); guestOnData(m); });
+    conn.on('close', dropped);
+  });
+  peer.on('error', e => {
+    clearTimeout(timer);
+    if (connected) return;
+    lobbyError(e.type === 'peer-unavailable' ? '找不到房號 ' + code + '，請確認對方已開好房間。' : '連線失敗（' + e.type + '），請再試一次。');
+  });
+}
+function guestOnData(m) {
+  if (m.t === 'state') { connected = true; if (!$('game').classList.contains('on')) show('game'); render(m.v); }
+  else if (m.t === 'full') lobbyError('這個房間已經有兩個人了。');
+  else if (m.t === 'bye') dropped();
+}
+
+function myPlay(id) {
+  if (role === 'host') { if (play(g, 0, id)) hostPush(); }
+  else send({ t: 'play', id });
+}
+function myRematch() {
+  if (role === 'host') { rematchWanted[0] = true; maybeRematch(); }
+  else send({ t: 'rematch' });
+}
+function teardown() {
+  try { send({ t: 'bye' }); } catch {}
+  try { conn && conn.close(); } catch {}
+  try { peer && peer.destroy(); } catch {}
+  try { bc && bc.close(); } catch {}
+  peer = conn = bc = g = null; connected = false; role = null; lastShownRound = 0; selected = null; curGid = null;
+  rematchWanted[0] = rematchWanted[1] = false;
+}
+function dropped() {
+  if (!role) return;
+  teardown();
+  $('endBanner').classList.remove('on');
+  $('dropBanner').classList.add('on');
+}
+function lobbyError(msg) { teardown(); show('lobby'); $('lobbyErr').textContent = msg; }
+
+// ---------------- UI ----------------
+const $ = id => document.getElementById(id);
+function show(id) {
+  for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id);
+  if (id === 'lobby') { $('roomTag').hidden = true; $('waitMsg').textContent = '把這個房號告訴朋友'; }
+}
+function setRoomTag() { $('roomTagCode').textContent = code; $('roomTag').hidden = false; }
+
+function cardEl(c, cls = '') {
+  const d = document.createElement('div');
+  if (!c) { d.className = 'card empty ' + cls; return d; }
+  if (c === 'back') { d.className = 'card back ' + cls; return d; }
+  d.className = 'card ' + c.el + ' ' + cls;
+  d.innerHTML = '<span class="sym">' + EL_SYM[c.el] + '</span><span class="lv">' + c.lv + '</span><span class="nm">' + EL_NAME[c.el] + '</span>';
+  d.setAttribute('aria-label', EL_NAME[c.el] + ' ' + c.lv + ' 級');
+  return d;
+}
+function renderPile(box, pile, winSet) {
+  box.innerHTML = '';
+  for (const el of ELS) {
+    const grp = document.createElement('div'); grp.className = 'pile-group';
+    grp.innerHTML = '<span class="lbl">' + EL_SYM[el] + EL_NAME[el] + '</span>';
+    for (const c of pile.filter(c => c.el === el)) grp.appendChild(cardEl(c, winSet && winSet.includes(c.id) ? 'hl' : ''));
+    box.appendChild(grp);
+  }
+}
+
+let selected = null, lastShownRound = 0, lockUntil = 0, cur = null, curGid = null;
+function render(v) {
+  if (v.gid !== curGid) { curGid = v.gid; lastShownRound = 0; selected = null; } // new game after rematch
+  cur = v;
+  $('oppHand').innerHTML = '';
+  for (let i = 0; i < v.oppCount; i++) $('oppHand').appendChild(cardEl('back'));
+  renderPile($('oppPile'), v.oppPile, v.winSet);
+  renderPile($('myPile'), v.pile, v.winSet);
+  $('deckInfo').textContent = '第 ' + v.round + ' 回合';
+
+  // arena
+  const ms = $('mySlot'), os = $('oppSlot'), vd = $('verdict');
+  ms.innerHTML = os.innerHTML = '';
+  const fresh = v.last && v.last.round > lastShownRound;
+  if (v.myPlayed || v.oppPlayed || !v.last) {
+    ms.appendChild(cardEl(v.myPlayed, v.myPlayed ? 'mine-hidden' : ''));
+    os.appendChild(cardEl(v.oppPlayed ? 'back' : null));
+    vd.innerHTML = '<div class="big" style="font-size:28px;color:var(--muted)">VS</div>';
+  } else {
+    const L = v.last;
+    ms.appendChild(cardEl(L.mine, fresh ? 'flip' : ''));
+    os.appendChild(cardEl(L.opp, fresh ? 'flip' : ''));
+    const word = { win: '你贏了這回合', lose: '對手贏了這回合', tie: '平手' }[L.result];
+    vd.innerHTML = '<div class="big ' + L.result + '">' + word + '</div><div class="why">' + L.why + '</div>';
+  }
+  if (fresh) { lastShownRound = v.last.round; lockUntil = Date.now() + 1200; setTimeout(() => cur && renderHand(cur), 1250); }
+
+  renderHand(v);
+
+  // end of game
+  const eb = $('endBanner');
+  if (v.winner) {
+    $('endTitle').textContent = v.winner === 'me' ? '你獲勝！🎉' : '對手獲勝';
+    $('endTitle').style.color = v.winner === 'me' ? 'var(--win)' : 'var(--lose)';
+    const set = (v.winner === 'me' ? v.pile : v.oppPile).filter(c => v.winSet.includes(c.id));
+    $('endWhy').textContent = set.every(c => c.el === set[0].el) ? '湊齊三張' + EL_NAME[set[0].el] : '水、火、冰各一張';
+    $('endCards').innerHTML = ''; set.forEach(c => $('endCards').appendChild(cardEl(c)));
+    const r = v.rematch || {};
+    $('rematchBtn').disabled = !!r.me;
+    $('rematchMsg').textContent = r.me ? '等對手按「再來一局」…' : r.opp ? '對手想再來一局！' : '';
+    setTimeout(() => cur && cur.winner && eb.classList.add('on'), fresh ? 1300 : 0);
+  } else eb.classList.remove('on');
+}
+function renderHand(v) {
+  const locked = !!v.myPlayed || !!v.winner || Date.now() < lockUntil;
+  if (selected && !v.hand.some(c => c.id === selected)) selected = null;
+  const h = $('hand'); h.innerHTML = ''; h.classList.toggle('locked', locked);
+  for (const c of v.hand) {
+    const el = cardEl(c, c.id === selected ? 'sel' : '');
+    el.onclick = () => {
+      if (locked) return;
+      if (selected === c.id) return doPlay();
+      selected = c.id; renderHand(v);
+    };
+    h.appendChild(el);
+  }
+  $('playBtn').disabled = locked || !selected;
+  $('hint').textContent = v.winner ? '這局結束了' : v.myPlayed ? (v.oppPlayed ? '翻牌中…' : '等對手出牌…')
+    : selected ? '再點一次或按「出這張」' : (v.oppPlayed ? '對手已出牌，換你選一張' : '選一張牌出牌');
+}
+function doPlay() {
+  if (!selected || !cur || cur.myPlayed) return;
+  const id = selected; selected = null; myPlay(id);
+}
+
+$('hostBtn').onclick = () => { $('lobbyErr').textContent = ''; startHost(); };
+$('joinBtn').onclick = () => {
+  const c = $('codeInput').value.replace(/\D/g, '');
+  if (c.length !== 4) { $('lobbyErr').textContent = '請輸入 4 位數房號'; return; }
+  $('lobbyErr').textContent = ''; startGuest(c);
+};
+$('codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinBtn').click(); });
+$('cancelBtn').onclick = () => { teardown(); show('lobby'); };
+$('playBtn').onclick = doPlay;
+$('rematchBtn').onclick = myRematch;
+$('leaveBtn').onclick = () => { teardown(); $('endBanner').classList.remove('on'); show('lobby'); };
+$('dropBtn').onclick = () => { $('dropBanner').classList.remove('on'); show('lobby'); };
+$('rulesBtn').onclick = () => $('rulesDlg').showModal();
+window.addEventListener('pagehide', () => { if (role) send({ t: 'bye' }); });
+</script>
+</body>
+</html>
