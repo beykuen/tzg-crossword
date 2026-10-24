@@ -136,6 +136,11 @@ main.game { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 3
 @media (prefers-reduced-motion: no-preference) { .stamp:not([hidden]) { animation: stamp 0.35s ease-out; } }
 @keyframes stamp { from { transform: rotate(-14deg) scale(1.8); opacity: 0; } to { transform: rotate(-14deg) scale(1); opacity: 0.88; } }
 
+.result { margin-top: 14px; padding: 12px 14px; border: 1.5px solid var(--red); border-radius: 12px; background: var(--red-soft); display: grid; gap: 4px; }
+.result .r-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--red); }
+.result .r-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.result .r-stats b { font-size: 18px; }
+.result .r-note { font-size: 13px; color: var(--muted); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1.5px dashed var(--grid-soft); align-items: center; }
 .progress { margin-left: auto; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 
@@ -224,6 +229,11 @@ main.game { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 3
       <div class="board-wrap" id="boardWrap">
         <div class="board" id="board"><div class="loading">出題中…</div></div>
         <div class="stamp" id="stamp" hidden>甲上</div>
+      </div>
+      <div class="result" id="result" hidden aria-live="polite">
+        <div class="r-title" id="rTitle"></div>
+        <div class="r-stats"><span>正確度 <b id="rAcc"></b></span><span>用時 <b id="rTime"></b></span><span>得分 <b id="rScore"></b></span></div>
+        <div class="r-note">正確度 70 分＋速度 30 分。每格平均 20 秒內速度拿滿分。90 分以上甲上，75 分以上甲，60 分以上乙。</div>
       </div>
       <div class="actions">
         <button type="button" class="btn primary" id="checkBtn">檢查</button>
@@ -494,7 +504,8 @@ function buildPuzzle(theme, diff) {
     .map(k => k.split(',').map(Number)).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const numOf = {}; starts.forEach(([r, c], i) => numOf[key(r, c)] = i + 1);
   words.forEach(w => w.n = numOf[key(w.r, w.c)]);
-  const s = { theme, diff, rows: r1 - r0 + 1, cols: c1 - c0 + 1, words, given: {}, entry: {}, revealed: {}, done: false };
+  const s = { theme, diff, rows: r1 - r0 + 1, cols: c1 - c0 + 1, words, given: {}, entry: {}, revealed: {}, done: false,
+    elapsed: 0, wrongEver: {}, revealedAll: false, result: null };
   prefill(s, DIFF[diff]);
   return s;
 }
@@ -558,8 +569,40 @@ function renderBoard() {
     }
     b.appendChild(d);
   }
-  $('stamp').hidden = !state.done;
+  const res = state.done ? state.result : null;
+  $('stamp').hidden = !(res && res.grade);
+  if (res && res.grade) $('stamp').textContent = res.grade;
+  renderResult();
   renderProgress();
+}
+
+function fmtTime(ms) {
+  const s = Math.floor((ms || 0) / 1000);
+  return `${Math.floor(s / 60)} 分 ${String(s % 60).padStart(2, '0')} 秒`;
+}
+
+// Accuracy (70) + speed (30). Pre-filled cells are excluded so every
+// difficulty is judged by the same per-cell standard.
+function gradePuzzle(s) {
+  const ans = answerMap(s), keys = Object.keys(ans).filter(k => !s.given[k]);
+  let pts = 0;
+  for (const k of keys) pts += s.revealed[k] ? 0 : s.wrongEver[k] ? 0.5 : 1;
+  const acc = keys.length ? pts / keys.length : 1;
+  const perCell = keys.length ? s.elapsed / 1000 / keys.length : 0;
+  const speed = perCell <= 20 ? 1 : perCell >= 60 ? 0 : (60 - perCell) / 40;
+  const score = Math.round(acc * 70 + speed * 30);
+  const grade = s.revealedAll ? '' : score >= 90 ? '甲上' : score >= 75 ? '甲' : score >= 60 ? '乙' : '丙';
+  return { acc: Math.round(acc * 100), score, grade, elapsed: s.elapsed };
+}
+
+function renderResult() {
+  const res = state && state.done ? state.result : null;
+  $('result').hidden = !res;
+  if (!res) return;
+  $('rTitle').textContent = res.grade ? `完成！得到「${res.grade}」` : '完成了，下次再挑戰看看自己想出來';
+  $('rAcc').textContent = res.acc + '%';
+  $('rTime').textContent = fmtTime(res.elapsed);
+  $('rScore').textContent = res.grade ? res.score : '－';
 }
 
 function wordFilled(w) { const ans = answerMap(state); return cellsOf(w).every(x => state.given[key(x.r, x.c)] || state.entry[key(x.r, x.c)]); }
@@ -593,7 +636,8 @@ function renderAsk() {
 function renderProgress() {
   const ans = answerMap(state), keys = Object.keys(ans);
   const filled = keys.filter(k => state.given[k] || state.entry[k]).length;
-  $('progress').textContent = `${state.theme}・已填 ${filled} / ${keys.length} 格`;
+  const t = Math.floor((state.elapsed || 0) / 1000);
+  $('progress').textContent = `${state.theme}・已填 ${filled} / ${keys.length} 格・${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
 function renderAll() { fitCells(); renderBoard(); renderClues(); renderAsk(); }
@@ -653,6 +697,7 @@ function afterChange() {
   const anyReveal = Object.keys(state.revealed).length > 0;
   if (allRight && !state.done) {
     state.done = true;
+    state.result = gradePuzzle(state);
     say(anyReveal ? '全部完成！有幾題是看答案的，下次試試自己想出來。' : '全部答對！太厲害了。', 'ok');
   }
   save(); renderBoard(); renderClues(); renderAsk();
@@ -663,6 +708,9 @@ $('checkBtn').addEventListener('click', () => {
   const right = keys.filter(k => state.entry[k] === ans[k]).length;
   const wrong = keys.filter(k => state.entry[k] && state.entry[k] !== ans[k]).length;
   const blank = keys.filter(k => !state.entry[k]).length;
+  // Remember every cell that was wrong at a check; fixing it later earns half credit.
+  keys.forEach(k => { if (state.entry[k] && state.entry[k] !== ans[k] && !state.revealed[k]) state.wrongEver[k] = true; });
+  save();
   checked = true; renderBoard();
   if (!wrong && !blank) { afterChange(); return; }
   const parts = [`對了 ${right} 格`];
@@ -686,6 +734,7 @@ $('revealAll').addEventListener('click', () => {
     return;
   }
   b.classList.remove('arm'); b.textContent = '看全部答案';
+  if (!state.done) state.revealedAll = true;
   const ans = answerMap(state);
   for (const k of Object.keys(ans)) if (!state.given[k] && state.entry[k] !== ans[k]) { state.entry[k] = ans[k]; state.revealed[k] = true; }
   afterChange();
@@ -693,7 +742,8 @@ $('revealAll').addEventListener('click', () => {
 
 $('clearBtn').addEventListener('click', () => {
   state.entry = {}; state.revealed = {}; state.done = false; checked = false;
-  save(); say('已經擦乾淨了。'); renderBoard(); renderClues(); renderAsk();
+  state.elapsed = 0; state.wrongEver = {}; state.revealedAll = false; state.result = null;
+  save(); say('已經擦乾淨了，重新計時。'); renderBoard(); renderClues(); renderAsk();
 });
 
 document.querySelectorAll('#diff button').forEach(bt => bt.addEventListener('click', () => {
@@ -723,6 +773,17 @@ function newPuzzle() {
 }
 
 window.addEventListener('resize', () => { if (state) { fitCells(); } });
+
+/* ---------- timer: counts only while the puzzle is open on screen ---------- */
+let tick = 0;
+setInterval(() => {
+  if (!state || state.done || document.visibilityState !== 'visible' || !$('bankPanel').hidden) return;
+  if (!$('board').querySelector('.cell.on')) return;   // still generating
+  state.elapsed = (state.elapsed || 0) + 1000;
+  renderProgress();
+  if (++tick % 5 === 0) save();
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' && state) save(); });
 
 /* ---------- custom bank panel ---------- */
 const HAN = /^[㐀-䶿一-鿿豈-﫿]{2,8}$/;
@@ -810,6 +871,10 @@ store.onChange(() => { renderThemeSelect(); if (!$('bankPanel').hidden) renderCu
 (function boot() {
   renderThemeSelect();
   if (state && state.words && themeNames().includes(state.theme)) {
+    // Puzzles saved before scoring existed lack these fields.
+    state.elapsed = state.elapsed || 0; state.wrongEver = state.wrongEver || {};
+    state.revealedAll = !!state.revealedAll;
+    if (state.done && !state.result) state.result = gradePuzzle(state);
     $('theme').value = state.theme;
     document.querySelectorAll('#diff button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.d === state.diff)));
     renderAll();
